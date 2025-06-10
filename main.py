@@ -5,21 +5,15 @@ from oauth2client.service_account import ServiceAccountCredentials
 import os
 
 # Securely fetch the token from environment variable
-TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Set this in Railway under Variables
-GUILD_ID = 1302072773384077382  # Replace with your server's ID
-ROLE_NAME = "Officer"  # Must match your Discord role name exactly
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Set this in your cloud environment
+GUILD_ID = 1302072773384077382  # Your server ID
+ROLE_NAME = "Officer"  # Your target role name
 
 intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
+intents.members = True  # Needed to assign roles
+intents.message_content = True  # Needed for reading message content
 
 bot = commands.Bot(command_prefix='!', intents=intents)
-
-# Setup Google Sheets access
-scope = ['https://spreadsheets.google.com/feeds','https://www.googleapis.com/auth/drive']
-creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
-client = gspread.authorize(creds)
-sheet = client.open("CYBERHAX Whitelist").sheet1
 
 @bot.event
 async def on_ready():
@@ -27,15 +21,28 @@ async def on_ready():
 
 @bot.command()
 async def verify(ctx):
-    user_id = str(ctx.author.id)
-    ids = sheet.col_values(3)  # Make sure this is the column with Discord IDs
+    try:
+        user_id = str(ctx.author.id)
+        
+        # Google Sheets setup
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name('service_account.json', scope)
+        client = gspread.authorize(creds)
+        sheet = client.open("CYBERHAX Whitelist").sheet1
 
-    if user_id in ids:
-        guild = ctx.guild
-        role = discord.utils.get(guild.roles, name=ROLE_NAME)
-        await ctx.author.add_roles(role)
-        await ctx.send(f"✅ {ctx.author.mention} verified as CYBERHAX member!")
-    else:
-        await ctx.send(f"❌ {ctx.author.mention} not found in CYBERHAX whitelist.")
+        ids = sheet.col_values(3)  # Ensure Discord IDs are in column 3
+
+        if user_id in ids:
+            role = discord.utils.get(ctx.guild.roles, name=ROLE_NAME)
+            if role:
+                await ctx.author.add_roles(role)
+                await ctx.send(f"✅ {ctx.author.mention} verified as CYBERHAX member!")
+            else:
+                await ctx.send("❌ Role not found. Please check the role name.")
+        else:
+            await ctx.send(f"❌ {ctx.author.mention} not found in CYBERHAX whitelist.")
+    except Exception as e:
+        await ctx.send(f"⚠️ Error occurred: {e}")
+        print(f"Error: {e}")
 
 bot.run(TOKEN)
